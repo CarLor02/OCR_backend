@@ -49,6 +49,7 @@ uploads/*
 !uploads/.gitkeep
 processed/*
 !processed/.gitkeep
+docling_models/*
 
 # Logs
 *.log
