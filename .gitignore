@@ -63,9 +63,10 @@ logs/
 *.tmp
 *.temp
 
-# Model files (large files excluded from git)
-docling_models/
+# Model cache directory (symlink, will be recreated)
 docling_cache/
+
+# Note: docling_models/ is included in the repository for offline usage
 
 # Test files
 test_*.py

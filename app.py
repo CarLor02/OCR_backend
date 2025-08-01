@@ -13,16 +13,35 @@ from flask_cors import CORS
 def setup_local_models():
     """配置docling使用项目本地模型"""
     project_root = Path(__file__).parent
+    local_models = project_root / "docling_models"
     local_cache = project_root / "docling_cache"
 
-    # 如果本地缓存目录存在，设置环境变量
-    if local_cache.exists():
+    # 检查本地模型是否存在
+    if local_models.exists():
+        # 创建缓存目录
+        local_cache.mkdir(exist_ok=True)
+
+        # 创建符号链接或复制模型
+        models_link = local_cache / "models"
+        if not models_link.exists():
+            try:
+                # 尝试创建符号链接
+                models_link.symlink_to(local_models.absolute())
+                print(f"✅ 创建模型符号链接: {models_link} -> {local_models}")
+            except OSError:
+                # 如果符号链接失败，复制目录
+                import shutil
+                shutil.copytree(local_models, models_link)
+                print(f"✅ 复制模型目录: {models_link}")
+
+        # 设置环境变量
         os.environ['DOCLING_CACHE_DIR'] = str(local_cache)
         print(f"✅ 配置docling使用本地模型: {local_cache}")
         return True
     else:
-        print(f"⚠️  本地模型缓存不存在: {local_cache}")
-        print("   将使用系统默认缓存，首次运行可能需要下载模型")
+        print(f"⚠️  本地模型目录不存在: {local_models}")
+        print("   请先运行模型设置脚本: python setup_models.py")
+        print("   或者将使用系统默认缓存，首次运行可能需要下载模型")
         return False
 
 # 在导入processors之前设置模型路径

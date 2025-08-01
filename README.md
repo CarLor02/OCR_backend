@@ -38,7 +38,18 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Configuration
+### 3. Setup Models
+
+Download and configure the required AI models (approximately 1.1GB):
+
+```bash
+python setup_models.py
+```
+
+This will automatically:
+- Download docling models for PDF processing
+- Configure local model cache
+- Verify the setup
 
 Copy the example environment file and configure:
 
@@ -50,7 +61,7 @@ Edit `.env` file with your settings:
 - Set `YUNWU_API_KEY` for image and scanned PDF processing
 - Configure other settings as needed
 
-### 4. Run the Service
+### 5. Run the Service
 
 ```bash
 python app.py
@@ -93,11 +104,32 @@ Key environment variables:
 
 ## Model Management
 
-The service automatically manages AI models:
+The service uses AI models for document processing:
 
-- **First run**: Models are downloaded automatically (requires internet)
-- **Subsequent runs**: Uses cached models for offline operation
-- **Model size**: Approximately 1.1GB total
+### Initial Setup
+```bash
+python setup_models.py
+```
+
+This downloads and configures:
+- **Layout Detection Model**: For PDF structure analysis (~505MB)
+- **Table Recognition Model**: For table extraction (~501MB)
+- **OCR Model**: For text recognition (~108MB)
+- **Figure Classification Model**: For image analysis (~16MB)
+- **Total size**: Approximately 1.1GB
+
+### Model Storage
+- Models are stored in `docling_models/` directory
+- Cache is created in `docling_cache/` for runtime use
+- **Offline operation**: Once downloaded, no internet required
+
+### Troubleshooting
+If models are missing or corrupted:
+```bash
+# Re-download models
+rm -rf docling_models/ docling_cache/
+python setup_models.py
+```
 
 ## Development
 
