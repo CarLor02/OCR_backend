@@ -6,16 +6,17 @@ PDF处理器
 import os
 import json
 import tempfile
+import requests
 from pathlib import Path
 from typing import Dict, Any, Optional
-
 from .base import BaseProcessor, ProcessingResult
-
+import re
+import pdfplumber
 # PDF处理相关导入
 try:
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
-    from docling.datamodel.accelerator_options import AcceleratorOptions, AcceleratorDevice
+    #from docling.datamodel.accelerator_options import AcceleratorOptions, AcceleratorDevice #20250802lrr注释，本地报错
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling_core.types.doc import ImageRefMode
     import warnings
@@ -58,11 +59,7 @@ class PDFProcessor(BaseProcessor):
         # 初始化文档转换器
         self._init_converter()
         
-        # API配置
-        self.api_key = config.get('yunwu_api_key') if config else None
-        self.api_base_url = config.get('yunwu_api_base_url', 'https://yunwu.ai/v1')
-        self.model = config.get('gemini_model', 'gemini-2.0-flash-thinking-exp-01-21')
-        
+    
         # 处理选项
         self.save_intermediate = config.get('save_intermediate', False) if config else False
     
@@ -85,11 +82,12 @@ class PDFProcessor(BaseProcessor):
         
         # 配置PDF处理选项
         pipeline_options = PdfPipelineOptions()
-        pipeline_options.do_ocr = True
+        pipeline_options.do_ocr = False
         pipeline_options.do_table_structure = True
-        pipeline_options.table_structure_options.do_cell_matching = True
-        pipeline_options.generate_page_images = True
+        pipeline_options.table_structure_options.do_cell_matching = False 
+        pipeline_options.generate_page_images = False
         pipeline_options.generate_picture_images = False
+    
         # 配置加速器选项
         pipeline_options.accelerator_options = AcceleratorOptions(
             num_threads=8,  # 使用8个线程
@@ -146,78 +144,99 @@ class PDFProcessor(BaseProcessor):
             self.logger.error(f"检测扫描PDF时出错: {e}")
             return False
     
-    def process_scanned_pdf_with_api(self, pages_dir: Path) -> str:
+    def process_scanned_pdf(self, file_path):
         """
-        使用API处理扫描PDF的页面图像
+        调用MonkeyOCRPDF解析API接口
+        :param file_path: 要解析的PDF文件路径
+        :return: 解析后的markdown内容
+        """
+        url = "http://38.60.251.79:7860/api/parse"  #TODO 去掉硬编码
+    
+        with open(file_path, 'rb') as f:
+            files = {'file': (file_path.name, f, 'application/pdf')}
+            response = requests.post(url, files=files)
+    
+        if response.status_code == 200:
+            return response.json()['markdown']
+        else:
+            raise Exception(f"API调用失败，状态码: {response.status_code}, 错误: {response.text}")
+
+   
+   
+    def process_scanned_pdf_with_api(self, file_path):
+        """
+        使用VLM API处理扫描PDF的页面图像
         
         Args:
-            pages_dir: 页面图像目录
+            file_path: 文件地址
             
         Returns:
-            str: 合并后的Markdown内容
+            str: Markdown内容
         """
-        if not self.api_key or not IMAGE_API_AVAILABLE:
-            self.logger.error("API密钥未设置或OpenAI库未安装，无法处理扫描PDF")
-            return ""
         
-        # 创建OpenAI客户端
-        client = OpenAI(
-            base_url=self.api_base_url,
-            api_key=self.api_key
-        )
-        
-        # 获取所有页面图像
-        page_images = sorted(pages_dir.glob("*.png"))
-        if not page_images:
-            self.logger.error("未找到页面图像")
-            return ""
-        
-        markdown_content = ""
-        
-        for i, page_image in enumerate(page_images, 1):
-            self.logger.info(f"处理第 {i}/{len(page_images)} 页: {page_image.name}")
+        try:
+            # 直接读取PDF文件的原生二进制数据
+            with open(file_path, 'rb') as f:
+                pdf_data = f.read()
             
-            try:
-                # 编码图像
-                with open(page_image, "rb") as image_file:
-                    base64_image = base64.b64encode(image_file.read()).decode('utf-8')
-                
-                # 调用API
-                response = client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": "请提取这个图像中的所有文本内容，并以Markdown格式返回。保留原始格式和表格结构，忽略水印和印章。"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/png;base64,{base64_image}"
-                                    }
+            # 将PDF原生数据编码为base64
+            pdf_base64 = base64.b64encode(pdf_data).decode('utf-8')
+            
+            # 构建请求数据
+            request_data = {
+                "contents": [
+                    {
+                        "role": "user", 
+                        "parts": [
+                            {
+                                "inline_data": {
+                                    "mime_type": "application/pdf",
+                                    "data": pdf_base64
                                 }
-                            ]
-                        }
-                    ],
-                    max_tokens=4000,
-                    temperature=0.1
-                )
-                
-                page_content = response.choices[0].message.content
-                if page_content:
-                    markdown_content += f"\n\n---\n\n{page_content}"
-                    self.logger.info(f"成功处理页面 {i}")
+                            },
+                            {
+                                "text": "请提取这个PDF中的所有文本内容，并以Markdown格式返回。忽略水印和印章，保留原始格式和表格结构。"
+                            }
+                        ]
+                    }
+                ]
+            }
+            
+            # 发送请求到Gemini API
+            url = "https://yunwu.ai/v1beta/models/gemini-2.5-flash:generateContent" #TODO去掉硬编码
+            headers = {
+                "Content-Type": "application/json"
+            }
+            params = {
+                "key": "your_api_key_here"  # TODO去掉硬编码(我取环境变量的一直不对，就这么写死了)
+            }
+            
+            self.logger.info(f"开始调用Gemini API处理PDF: {file_path.name}")
+            
+            response = requests.post(
+                url,
+                json=request_data,
+                headers=headers,
+                params=params,
+                timeout=600
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'candidates' in result and len(result['candidates']) > 0:
+                    markdown_content = result['candidates'][0]['content']['parts'][0]['text']
+                    self.logger.info(f"成功提取PDF内容，长度: {len(markdown_content)}")
+                    return markdown_content
                 else:
-                    self.logger.warning(f"页面 {i} 未提取到内容")
-                    
-            except Exception as e:
-                self.logger.error(f"处理页面 {i} 时出错: {e}")
-                continue
-        
-        return markdown_content.strip()
+                    self.logger.error("API返回数据格式异常")
+                    return ""
+            else:
+                self.logger.error(f"API调用失败: {response.status_code}, {response.text}")
+                return ""
+                
+        except Exception as e:
+            self.logger.error(f"处理PDF时出错: {e}")
+            return ""
     
     def remove_images_from_markdown(self, content: str) -> str:
         """
@@ -229,12 +248,132 @@ class PDFProcessor(BaseProcessor):
         Returns:
             str: 移除图像后的内容
         """
-        import re
+        
         # 移除图像引用
         content = re.sub(r'!\[.*?\]\(.*?\)', '', content)
         # 移除多余的空行
         content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)
         return content.strip()
+    
+    def clean_text_for_md(self,text: str) -> str:
+        """Clean and format extracted text for Markdown."""
+        # Remove excessive whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+    
+        # Handle common PDF artifacts
+        text = re.sub(r'-\s+(\w)', r'\1', text)  # Fix hyphenated words
+        text = re.sub(r'\s+([.,;:!?)])', r'\1', text)  # Fix punctuation spacing
+    
+        return text
+
+    def extract_tables_from_page(self,page) -> str:
+        """Extract tables from a PDF page and format as Markdown tables."""
+        md_tables = []
+        tables = page.extract_tables()
+    
+        for table in tables:
+            if not table or len(table) < 1:
+                continue
+            
+            # Create Markdown table header
+            header = "| " + " | ".join(str(cell) for cell in table[0]) + " |"
+            separator = "| " + " | ".join(["---"] * len(table[0])) + " |"
+            md_table = [header, separator]
+        
+            # Add rows
+            for row in table[1:]:
+                md_table.append("| " + " | ".join(str(cell) for cell in row) + " |")
+        
+            md_tables.append("\n".join(md_table))
+    
+        return "\n\n".join(md_tables)
+
+    def convert_pdf_to_md(self,
+        pdf_path: str    
+        ) -> str:
+        """
+        Convert a PDF file to Markdown format.
+    
+        Args:
+            pdf_path: Path to the input PDF file
+        Returns:
+            Path to the generated Markdown file
+        """
+        if not os.path.exists(pdf_path):
+            raise self.logger.error(f"PDF file not found: {pdf_path}")
+    
+        markdown_content=""
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                for page in pdf.pages:
+                    # Extract text
+                    text = page.extract_text()
+                    cleaned_text = self.clean_text_for_md(text)
+                    markdown_content+=cleaned_text + "\n\n"
+                
+                    # Extract tables if enabled
+                    tables_md = self.extract_tables_from_page(page)
+                    if tables_md:
+                        markdown_content+=tables_md + "\n\n"
+                         
+            return markdown_content
+    
+        except Exception as e:
+            self.logger.error(f"Failed to convert PDF: {str(e)}")
+
+    def analyze_pdf(self, pdf_path):
+        doc = fitz.open(pdf_path)
+        has_text = any(page.get_text() for page in doc)  # 是否包含文本层
+        
+        # 检测复杂语义：表格、多列布局、复杂格式等
+        has_complex_layout = False
+        total_text_length = 0
+        table_count = 0
+        
+        for page in doc:
+            page_text = page.get_text()
+            total_text_length += len(page_text)
+            
+            # 检测表格特征
+            # 1. 多个制表符或大量空格分隔
+            if '\t' in page_text or '  ' * 5 in page_text:
+                has_complex_layout = True
+            
+            # 2. 检测表格行模式（连续的|符号或多个连续空格）
+            lines = page_text.split('\n')
+            table_like_lines = 0
+            for line in lines:
+                # 检测类似表格的行（包含多个分隔符）
+                if line.count('|') >= 2 or line.count('\t') >= 2 or len(line.split('  ')) >= 3:
+                    table_like_lines += 1
+        
+            # 如果有较多类似表格的行，认为有表格
+            if table_like_lines >= 3:
+                table_count += 1
+                has_complex_layout = True
+            
+            # 3. 检测多列布局（文本行长度差异很大）
+            line_lengths = [len(line.strip()) for line in lines if line.strip()]
+            if len(line_lengths) > 5:
+                avg_length = sum(line_lengths) / len(line_lengths)
+                variance = sum((l - avg_length) ** 2 for l in line_lengths) / len(line_lengths)
+                if variance > 1000:  # 行长度差异很大
+                    has_complex_layout = True
+                
+            # 4. 检测数字密集区域（可能是表格数据）
+            digit_ratio = sum(1 for char in page_text if char.isdigit()) / len(page_text) if page_text else 0
+            if digit_ratio > 0.15:  # 数字占比超过15%，可能包含大量表格数据
+                has_complex_layout = True
+        
+        doc.close()
+        
+        # 判断PDF类型
+        if not has_text or total_text_length < 100:
+            return "scanned"  # 无文本或文本很少，需要OCR
+        elif has_complex_layout or table_count >= 2:  # 有复杂布局或多个表格
+            return "hybrid"  # 使用docling处理
+        else:
+            return "text"  # 纯文本，直接提取
     
     def process(self, file_path: Path) -> ProcessingResult:
         """
@@ -247,48 +386,32 @@ class PDFProcessor(BaseProcessor):
             ProcessingResult: 处理结果
         """
         try:
-            # 检测是否为扫描PDF
-            is_scanned = self.is_scanned_pdf(file_path)
-            
-            # 转换文档
-            conv_result = self.doc_converter.convert(str(file_path))
-            
-            markdown_content = ""
-            temp_dirs = []
-            
-            if not is_scanned:
-                # 普通PDF，直接导出Markdown
+            markdown_content=""
+            pdf_type = self.analyze_pdf(file_path)
+
+           #根据pdf_type实现合适的处理方式，如果是text，就采用
+            if pdf_type == "text":
+                #markdown_content=self.convert_pdf_to_md(file_path) #LRR：这个版本还能提取表格，正则提取，不过我觉得效果太差，还不如简单版本
+                #PyMuPDF直接提取
+                doc = fitz.open(file_path)
+                markdown_content = ""
+                for page_num in range(len(doc)):
+                    page = doc[page_num]
+                    page_text = page.get_text()
+                    if page_text.strip():
+                        markdown_content += f"\n\n## 第 {page_num + 1} 页\n\n{page_text}"
+                doc.close()
+            elif pdf_type == "scanned":
+                markdown_content=self.process_scanned_pdf_with_api(file_path)
+            else:  # 混合型
+                conv_result = self.doc_converter.convert(str(file_path))
+                #直接导出Markdown
                 markdown_content = conv_result.document.export_to_markdown(
                     image_mode=ImageRefMode.EMBEDDED
                 )
                 # 移除图像引用
                 markdown_content = self.remove_images_from_markdown(markdown_content)
                 
-            else:
-                # 扫描PDF，使用API处理页面图像
-                self.logger.info("检测到扫描PDF，使用API处理页面图像")
-                
-                # 创建临时目录保存页面图像
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    pages_dir = Path(temp_dir) / "pages"
-                    pages_dir.mkdir(exist_ok=True)
-                    
-                    # 保存页面图像
-                    if conv_result.document.pages:
-                        for page_no, page in conv_result.document.pages.items():
-                            if page.image and page.image.pil_image:
-                                page_image_path = pages_dir / f"page-{page.page_no}.png"
-                                page.image.pil_image.save(page_image_path, format="PNG")
-                    
-                    # 使用API处理页面图像
-                    if list(pages_dir.glob("*.png")):
-                        markdown_content = self.process_scanned_pdf_with_api(pages_dir)
-                    else:
-                        # 如果没有页面图像，回退到普通处理
-                        markdown_content = conv_result.document.export_to_markdown(
-                            image_mode=ImageRefMode.EMBEDDED
-                        )
-                        markdown_content = self.remove_images_from_markdown(markdown_content)
             
             if not markdown_content:
                 return ProcessingResult(
@@ -297,10 +420,20 @@ class PDFProcessor(BaseProcessor):
                 )
             
             # 构建元数据
+            if pdf_type in ["text", "scanned"]:
+                # 获取页数
+                doc = fitz.open(file_path)
+                pages_count = len(doc)
+                doc.close()
+            else:
+                # 混合型，从conv_result获取
+                pages_count = len(conv_result.document.pages) if conv_result and conv_result.document.pages else 0
+            
             metadata = {
                 'file_type': 'pdf',
-                'is_scanned': is_scanned,
-                'pages_count': len(conv_result.document.pages) if conv_result.document.pages else 0
+                'pdf_type': pdf_type,
+                'is_scanned': pdf_type == "scanned",
+                'pages_count': pages_count
             }
             
             return ProcessingResult(

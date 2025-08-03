@@ -45,7 +45,7 @@ def setup_local_models():
         return False
 
 # 在导入processors之前设置模型路径
-setup_local_models()
+# setup_local_models()
 
 from config import get_config
 from processors import PDFProcessor, ImageProcessor, ExcelProcessor, HTMLProcessor
@@ -177,6 +177,9 @@ def process_file():
                 'gemini_model': app.config.get('DEFAULT_GEMINI_MODEL'),
                 'save_intermediate': app.config.get('SAVE_INTERMEDIATE_FILES', False)
             }
+            
+            # 调试信息
+            app.logger.info(f"处理器配置: {processor_config}")
             
             # 获取处理器并处理文件
             processor = get_processor(file_type, processor_config)

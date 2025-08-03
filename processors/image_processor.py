@@ -6,6 +6,8 @@
 import base64
 from pathlib import Path
 from typing import Dict, Any, Optional
+import requests
+import json
 
 from .base import BaseProcessor, ProcessingResult
 
@@ -29,17 +31,6 @@ class ImageProcessor(BaseProcessor):
         """
         super().__init__(config)
         
-        if not IMAGE_API_AVAILABLE:
-            raise ImportError("OpenAI库未安装，无法处理图像文件")
-        
-        # API配置
-        self.api_key = config.get('yunwu_api_key') if config else None
-        self.api_base_url = config.get('yunwu_api_base_url', 'https://yunwu.ai/v1')
-        self.model = config.get('gemini_model', 'gemini-2.0-flash-thinking-exp-01-21')
-        
-        if not self.api_key:
-            raise ValueError("未设置云雾AI API密钥，无法处理图像文件")
-    
     def get_supported_extensions(self) -> list:
         """获取支持的文件扩展名"""
         return ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif']
@@ -93,45 +84,67 @@ class ImageProcessor(BaseProcessor):
         Returns:
             str: 提取的文本内容
         """
-        # 创建OpenAI客户端
-        client = OpenAI(
-            base_url=self.api_base_url,
-            api_key=self.api_key
-        )
-        
-        # 编码图像
-        base64_image = self.encode_image(file_path)
-        mime_type = self.get_mime_type(file_path)
-        
-        # 默认提示词
-        if prompt is None:
-            prompt = "请提取这个图像中的所有文本内容，并以Markdown格式返回。保留原始格式和表格结构，忽略水印和印章。"
-        
-        # 调用API
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:{mime_type};base64,{base64_image}"
+        try:
+            # 编码图像
+            base64_image = self.encode_image(file_path)
+            mime_type = self.get_mime_type(file_path)
+            
+            # 默认提示词
+            if prompt is None:
+                prompt = "请提取这个图像中的所有文本内容，并以Markdown格式返回。保留原始格式和表格结构，忽略水印和印章。"
+            
+            # 构建请求数据
+            request_data = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {
+                                "inline_data": {
+                                    "mime_type": mime_type,
+                                    "data": base64_image
+                                }
+                            },
+                            {
+                                "text": prompt
                             }
-                        }
-                    ]
-                }
-            ],
-            max_tokens=4000,
-            temperature=0.1
-        )
-        
-        return response.choices[0].message.content or ""
+                        ]
+                    }
+                ]
+            }
+            
+            # 发送请求到Gemini API
+            url = "https://yunwu.ai/v1beta/models/gemini-2.0-flash:generateContent" #TODO：硬编码
+            headers = {
+                "Content-Type": "application/json"
+            }
+            params = {
+                "key": "your_api_key_here"  # TODO去掉硬编码(我取环境变量的一直不对，就这么写死了)
+            }
+            
+            response = requests.post(
+                url,
+                json=request_data,
+                headers=headers,
+                params=params,
+                timeout=300
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if 'candidates' in result and len(result['candidates']) > 0:
+                    content = result['candidates'][0]['content']['parts'][0]['text']
+                    return content
+                else:
+                    self.logger.error("Gemini API返回格式异常")
+                    return ""
+            else:
+                self.logger.error(f"Gemini API调用失败: {response.status_code}, {response.text}")
+                return ""
+                
+        except Exception as e:
+            self.logger.error(f"提取图像文本时出错: {e}")
+            return ""
     
     def process(self, file_path: Path) -> ProcessingResult:
         """
@@ -161,7 +174,7 @@ class ImageProcessor(BaseProcessor):
                 'file_type': 'image',
                 'mime_type': self.get_mime_type(file_path),
                 'file_size': file_info.get('size', 0),
-                'model_used': self.model
+                'model_used': 'gemini-2.0-flash'
             }
             
             return ProcessingResult(

@@ -6,6 +6,19 @@
 import os
 from pathlib import Path
 
+# 加载.env文件
+try:
+    from dotenv import load_dotenv
+    # 加载当前目录的.env文件
+    env_path = Path(__file__).parent / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+        print(f"✅ 已加载环境配置文件: {env_path}")
+    else:
+        print(f"⚠️  环境配置文件不存在: {env_path}")
+except ImportError:
+    print("⚠️  python-dotenv未安装，无法加载.env文件")
+
 class Config:
     """应用配置类"""
     
@@ -33,12 +46,6 @@ class Config:
         'html': ['.html', '.htm']
     }
     
-    # API配置
-    YUNWU_API_KEY = os.environ.get('YUNWU_API_KEY')
-    YUNWU_API_BASE_URL = os.environ.get('YUNWU_API_BASE_URL', 'https://yunwu.ai/v1')
-    
-    # 处理器配置
-    DEFAULT_GEMINI_MODEL = os.environ.get('DEFAULT_GEMINI_MODEL', 'gemini-2.0-flash-thinking-exp-01-21')
     
     # 日志配置
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
@@ -59,9 +66,6 @@ class Config:
         app.config.from_object(cls)
         
         # 验证必要的配置
-        if not cls.YUNWU_API_KEY:
-            app.logger.warning("YUNWU_API_KEY未设置，图像和扫描PDF处理功能将不可用")
-    
     @classmethod
     def get_all_allowed_extensions(cls):
         """获取所有支持的文件扩展名"""
