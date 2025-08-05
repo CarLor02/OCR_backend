@@ -51,6 +51,11 @@ class Config:
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     
+    # API配置
+    YUNWU_API_KEY = os.environ.get('YUNWU_API_KEY')
+    YUNWU_API_BASE_URL = os.environ.get('YUNWU_API_BASE_URL', 'https://yunwu.ai/v1')
+    DEFAULT_GEMINI_MODEL = os.environ.get('DEFAULT_GEMINI_MODEL', 'gemini-2.0-flash-exp')
+
     # 处理选项
     SAVE_INTERMEDIATE_FILES = os.environ.get('SAVE_INTERMEDIATE_FILES', 'false').lower() == 'true'
     CLEANUP_TEMP_FILES = os.environ.get('CLEANUP_TEMP_FILES', 'true').lower() == 'true'
