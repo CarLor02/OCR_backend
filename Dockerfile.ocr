@@ -60,7 +60,7 @@ RUN chmod +x start.sh
 COPY clash-for-linux-master ./clash-for-linux-master
 RUN chmod +x ./clash-for-linux-master/start.sh && \
     ./clash-for-linux-master/start.sh
-RUN source /etc/profile.d/clash.sh && \
+RUN . /etc/profile.d/clash.sh && \
     proxy_on
 
 # 暴露端口
