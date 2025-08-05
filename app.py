@@ -45,7 +45,7 @@ def setup_local_models():
         return False
 
 # 在导入processors之前设置模型路径
-# setup_local_models()
+setup_local_models()
 
 from config import get_config
 from processors import PDFProcessor, ImageProcessor, ExcelProcessor, HTMLProcessor

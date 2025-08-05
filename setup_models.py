@@ -35,11 +35,11 @@ def setup_models():
     
     try:
         # 导入docling并下载模型
-        #from docling.utils.model_downloader import download_models
+        from docling.utils.model_downloader import download_models
         from docling.datamodel.settings import settings
-        
+
         print(f"   下载位置: {settings.cache_dir}")
-        
+
         # 下载模型
         output_dir = download_models(
             force=False,
