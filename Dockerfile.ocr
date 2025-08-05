@@ -56,10 +56,12 @@ RUN mkdir -p uploads processed docling_cache docling_models
 # 设置权限
 RUN chmod +x start.sh
 
-COPY ../clash-for-linux-master ./clash-for-linux-master
+# 复制clash代理配置（需要先将clash-for-linux-master复制到当前目录）
+COPY clash-for-linux-master ./clash-for-linux-master
 RUN chmod +x ./clash-for-linux-master/start.sh && \
     ./clash-for-linux-master/start.sh
 
+# 启用代理
 RUN proxy_on
 
 # 暴露端口

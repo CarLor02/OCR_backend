@@ -73,3 +73,6 @@ docling_cache/
 test_*.py
 *_test.py
 tests/
+
+# Proxy configuration (clash)
+clash-for-linux-master/
