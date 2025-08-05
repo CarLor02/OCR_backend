@@ -2,7 +2,7 @@
 
 # OCR Backend 启动脚本 - 端口管理版本
 
-PORT=5050
+PORT=7860
 
 echo "=== OCR Backend 启动脚本 ==="
 

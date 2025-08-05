@@ -39,18 +39,18 @@ cp .env.example .env
 python app.py
 ```
 
-服务将在 http://localhost:5050 启动
+服务将在 http://localhost:7860 启动
 
 ## 测试服务
 
 ### 上传PDF文件
 ```bash
-curl -X POST -F "file=@your_document.pdf" http://localhost:5050/process
+curl -X POST -F "file=@your_document.pdf" http://localhost:7860/process
 ```
 
 ### 上传图片文件
 ```bash
-curl -X POST -F "file=@your_image.jpg" http://localhost:5050/process
+curl -X POST -F "file=@your_image.jpg" http://localhost:7860/process
 ```
 
 ## 常见问题

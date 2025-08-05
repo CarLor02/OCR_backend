@@ -23,7 +23,7 @@ supported_file_types = [
 
 if __name__ == '__main__':
     # 后端API配置
-    BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:5050")
+    BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:7860")
     
     def render_latex_table_to_image(latex_content, temp_dir):
         """渲染LaTeX表格为图像"""

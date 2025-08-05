@@ -173,7 +173,7 @@ def main():
             print("\n📋 接下来的步骤:")
             print("1. 配置环境变量（复制.env.example为.env并编辑）")
             print("2. 启动服务: python app.py")
-            print("3. 访问: http://localhost:5050")
+            print("3. 访问: http://localhost:7860")
         else:
             print("\n❌ 模型验证失败，请检查配置")
             sys.exit(1)

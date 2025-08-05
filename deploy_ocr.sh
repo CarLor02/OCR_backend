@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 
 # 配置参数
 PROJECT_NAME="ocr-backend"
-OCR_PORT=5050
+OCR_PORT=7860
 DEPLOY_DIR="$(pwd)"
 SKIP_GIT=false
 
@@ -142,7 +142,7 @@ start_ocr() {
     print_message $YELLOW "正在启动OCR容器..."
     docker run -d \
         --name ${PROJECT_NAME} \
-        -p ${OCR_PORT}:5050 \
+        -p ${OCR_PORT}:7860 \
         --gpus all \
         -v $(pwd)/uploads:/app/uploads \
         -v $(pwd)/processed:/app/processed \

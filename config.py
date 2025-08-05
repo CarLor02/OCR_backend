@@ -28,7 +28,7 @@ class Config:
     
     # 服务器配置
     HOST = os.environ.get('HOST', '0.0.0.0')
-    PORT = int(os.environ.get('PORT', 5050))
+    PORT = int(os.environ.get('PORT', 7860))
     
     # 文件存储配置
     BASE_DIR = Path(__file__).parent
