@@ -59,8 +59,9 @@ RUN chmod +x start.sh
 # 复制clash代理配置（需要先将clash-for-linux-master复制到当前目录）
 COPY clash-for-linux-master ./clash-for-linux-master
 RUN chmod +x ./clash-for-linux-master/start.sh && \
-    ./clash-for-linux-master/start.sh
-RUN /bin/bash -c "source /etc/profile.d/clash.sh && proxy_on"
+    ./clash-for-linux-master/start.sh && \
+    source /etc/profile.d/clash.sh && \
+    proxy_on
 
 # 暴露端口
 EXPOSE 7860
