@@ -26,8 +26,10 @@ def setup_local_models():
         if model_artifacts.exists():
             # 创建必要的符号链接，让 docling 能找到模型文件
             layout_dir = model_artifacts / "layout"
+            tableformer_dir = model_artifacts / "tableformer"
+
+            # 创建 layout 模型的符号链接
             if layout_dir.exists():
-                # 创建符号链接到根目录
                 for file_name in ["model.safetensors", "preprocessor_config.json", "config.json"]:
                     src_file = layout_dir / file_name
                     dst_file = model_artifacts / file_name
@@ -40,6 +42,21 @@ def setup_local_models():
                             import shutil
                             shutil.copy2(src_file, dst_file)
                             print(f"✅ 复制文件: {src_file} -> {dst_file}")
+
+            # 创建 tableformer 模型的符号链接
+            if tableformer_dir.exists():
+                for mode in ["accurate", "fast"]:
+                    src_dir = tableformer_dir / mode
+                    dst_dir = model_artifacts / mode
+                    if src_dir.exists() and not dst_dir.exists():
+                        try:
+                            dst_dir.symlink_to(src_dir)
+                            print(f"✅ 创建符号链接: {dst_dir} -> {src_dir}")
+                        except OSError:
+                            # 如果符号链接失败，复制目录
+                            import shutil
+                            shutil.copytree(src_dir, dst_dir)
+                            print(f"✅ 复制目录: {src_dir} -> {dst_dir}")
 
             # 设置 docling 使用本地模型的环境变量
             os.environ['DOCLING_ARTIFACTS_PATH'] = str(model_artifacts)
