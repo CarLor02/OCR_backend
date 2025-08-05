@@ -80,11 +80,18 @@ class PDFProcessor(BaseProcessor):
             device = AcceleratorDevice.CPU
             self.logger.info("使用CPU处理")
         
+        # 检查是否有本地模型路径
+        artifacts_path = os.environ.get('DOCLING_ARTIFACTS_PATH')
+        if artifacts_path and Path(artifacts_path).exists():
+            self.logger.info(f"使用本地模型路径: {artifacts_path}")
+
         # 配置PDF处理选项
-        pipeline_options = PdfPipelineOptions()
+        pipeline_options = PdfPipelineOptions(
+            artifacts_path=artifacts_path if artifacts_path and Path(artifacts_path).exists() else None
+        )
         pipeline_options.do_ocr = False
         pipeline_options.do_table_structure = True
-        pipeline_options.table_structure_options.do_cell_matching = False 
+        pipeline_options.table_structure_options.do_cell_matching = False
         pipeline_options.generate_page_images = False
         pipeline_options.generate_picture_images = False
     

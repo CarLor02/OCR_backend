@@ -12,12 +12,46 @@ from flask_cors import CORS
 # 配置docling使用项目本地模型
 def setup_local_models():
     """配置docling使用项目本地模型"""
+
     project_root = Path(__file__).parent
     local_models = project_root / "docling_models"
     local_cache = project_root / "docling_cache"
 
     # 检查本地模型是否存在
-    if local_models.exists():
+    if local_models.exists() and any(local_models.iterdir()):
+        # docling 的主模型路径应该指向 model_artifacts 目录
+        docling_main_models = local_models / "ds4sd--docling-models"
+        model_artifacts = docling_main_models / "model_artifacts"
+
+        if model_artifacts.exists():
+            # 创建必要的符号链接，让 docling 能找到模型文件
+            layout_dir = model_artifacts / "layout"
+            if layout_dir.exists():
+                # 创建符号链接到根目录
+                for file_name in ["model.safetensors", "preprocessor_config.json", "config.json"]:
+                    src_file = layout_dir / file_name
+                    dst_file = model_artifacts / file_name
+                    if src_file.exists() and not dst_file.exists():
+                        try:
+                            dst_file.symlink_to(src_file)
+                            print(f"✅ 创建符号链接: {dst_file} -> {src_file}")
+                        except OSError:
+                            # 如果符号链接失败，复制文件
+                            import shutil
+                            shutil.copy2(src_file, dst_file)
+                            print(f"✅ 复制文件: {src_file} -> {dst_file}")
+
+            # 设置 docling 使用本地模型的环境变量
+            os.environ['DOCLING_ARTIFACTS_PATH'] = str(model_artifacts)
+            artifacts_path = str(model_artifacts)
+        elif docling_main_models.exists():
+            os.environ['DOCLING_ARTIFACTS_PATH'] = str(docling_main_models)
+            artifacts_path = str(docling_main_models)
+        else:
+            # 如果没有找到主模型目录，使用整个模型目录
+            os.environ['DOCLING_ARTIFACTS_PATH'] = str(local_models)
+            artifacts_path = str(local_models)
+
         # 创建缓存目录
         local_cache.mkdir(exist_ok=True)
 
@@ -34,12 +68,20 @@ def setup_local_models():
                 shutil.copytree(local_models, models_link)
                 print(f"✅ 复制模型目录: {models_link}")
 
-        # 设置环境变量
+        # 设置缓存目录环境变量
         os.environ['DOCLING_CACHE_DIR'] = str(local_cache)
-        print(f"✅ 配置docling使用本地模型: {local_cache}")
+
+        # 设置离线模式环境变量，防止访问外部网络
+        os.environ['HF_HUB_OFFLINE'] = '1'
+        os.environ['TRANSFORMERS_OFFLINE'] = '1'
+        os.environ['HF_DATASETS_OFFLINE'] = '1'
+
+        print(f"✅ 配置docling使用本地模型: {artifacts_path}")
+        print(f"✅ 设置模型缓存目录: {local_cache}")
+        print("✅ 已启用离线模式，禁止访问外部网络")
         return True
     else:
-        print(f"⚠️  本地模型目录不存在: {local_models}")
+        print(f"⚠️  本地模型目录不存在或为空: {local_models}")
         print("   请先运行模型设置脚本: python setup_models.py")
         print("   或者将使用系统默认缓存，首次运行可能需要下载模型")
         return False

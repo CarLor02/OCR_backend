@@ -56,11 +56,29 @@ RUN mkdir -p uploads processed docling_cache docling_models
 # 设置权限
 RUN chmod +x start.sh
 
-# 复制clash代理配置（需要先将clash-for-linux-master复制到当前目录）
-COPY clash-for-linux-master ./clash-for-linux-master
-RUN chmod +x ./clash-for-linux-master/start.sh && \
-    ./clash-for-linux-master/start.sh && \
-    /bin/bash -c "source /etc/profile.d/clash.sh && proxy_on"
+# 设置离线模式环境变量
+ENV OFFLINE_MODE=true
+ENV DISABLE_EXTERNAL_APIS=true
+ENV USE_LOCAL_MODELS_ONLY=true
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
+ENV HF_DATASETS_OFFLINE=1
+ENV DOCLING_CACHE_DIR=/app/docling_cache
+ENV DOCLING_ARTIFACTS_PATH=/app/docling_models/ds4sd--docling-models/model_artifacts
+
+# 预设置模型缓存和符号链接（如果本地模型存在）
+RUN if [ -d "./docling_models/ds4sd--docling-models/model_artifacts" ]; then \
+        echo "设置本地模型缓存..." && \
+        ln -sf /app/docling_models /app/docling_cache/models && \
+        echo "创建模型文件符号链接..." && \
+        cd /app/docling_models/ds4sd--docling-models/model_artifacts && \
+        ln -sf layout/model.safetensors model.safetensors && \
+        ln -sf layout/preprocessor_config.json preprocessor_config.json && \
+        ln -sf layout/config.json config.json && \
+        echo "模型设置完成"; \
+    else \
+        echo "本地模型不存在，将在运行时处理..."; \
+    fi
 
 # 暴露端口
 EXPOSE 7860
