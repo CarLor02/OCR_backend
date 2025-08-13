@@ -33,7 +33,12 @@ def setup_local_models():
                 for file_name in ["model.safetensors", "preprocessor_config.json", "config.json"]:
                     src_file = layout_dir / file_name
                     dst_file = model_artifacts / file_name
-                    if src_file.exists() and not dst_file.exists():
+                    if src_file.exists():
+                        # 如果目标文件已存在，先删除
+                        if dst_file.exists() or dst_file.is_symlink():
+                            dst_file.unlink()
+                            print(f"🗑️  删除已存在的文件: {dst_file}")
+
                         try:
                             dst_file.symlink_to(src_file)
                             print(f"✅ 创建符号链接: {dst_file} -> {src_file}")
@@ -48,7 +53,17 @@ def setup_local_models():
                 for mode in ["accurate", "fast"]:
                     src_dir = tableformer_dir / mode
                     dst_dir = model_artifacts / mode
-                    if src_dir.exists() and not dst_dir.exists():
+                    if src_dir.exists():
+                        # 如果目标目录已存在，先删除
+                        if dst_dir.exists() or dst_dir.is_symlink():
+                            if dst_dir.is_symlink():
+                                dst_dir.unlink()
+                                print(f"🗑️  删除已存在的符号链接: {dst_dir}")
+                            else:
+                                import shutil
+                                shutil.rmtree(dst_dir)
+                                print(f"🗑️  删除已存在的目录: {dst_dir}")
+
                         try:
                             dst_dir.symlink_to(src_dir)
                             print(f"✅ 创建符号链接: {dst_dir} -> {src_dir}")
@@ -74,16 +89,25 @@ def setup_local_models():
 
         # 创建符号链接或复制模型
         models_link = local_cache / "models"
-        if not models_link.exists():
-            try:
-                # 尝试创建符号链接
-                models_link.symlink_to(local_models.absolute())
-                print(f"✅ 创建模型符号链接: {models_link} -> {local_models}")
-            except OSError:
-                # 如果符号链接失败，复制目录
+        # 如果目标已存在，先删除
+        if models_link.exists() or models_link.is_symlink():
+            if models_link.is_symlink():
+                models_link.unlink()
+                print(f"🗑️  删除已存在的模型符号链接: {models_link}")
+            else:
                 import shutil
-                shutil.copytree(local_models, models_link)
-                print(f"✅ 复制模型目录: {models_link}")
+                shutil.rmtree(models_link)
+                print(f"🗑️  删除已存在的模型目录: {models_link}")
+
+        try:
+            # 尝试创建符号链接
+            models_link.symlink_to(local_models.absolute())
+            print(f"✅ 创建模型符号链接: {models_link} -> {local_models}")
+        except OSError:
+            # 如果符号链接失败，复制目录
+            import shutil
+            shutil.copytree(local_models, models_link)
+            print(f"✅ 复制模型目录: {models_link}")
 
         # 设置缓存目录环境变量
         os.environ['DOCLING_CACHE_DIR'] = str(local_cache)
