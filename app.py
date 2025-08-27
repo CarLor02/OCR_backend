@@ -5,6 +5,8 @@ OCR Backend Flask应用
 
 import os
 import logging
+import base64
+import tempfile
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -191,7 +193,13 @@ def health_check():
             data={
                 "status": "healthy",
                 "service": "OCR Backend",
-                "version": "1.0.0"
+                "version": "1.0.0",
+                "endpoints": {
+                    "file_upload": "/api/process",
+                    "base64_processing": "/api/process-base64",
+                    "supported_types": "/api/supported-types",
+                    "health_check": "/api/health"
+                }
             },
             message="服务运行正常"
         )
@@ -310,6 +318,159 @@ def process_file():
     
     except Exception as e:
         app.logger.error(f"API调用异常: {e}", exc_info=True)
+        return ResponseUtils.make_json_response(
+            ResponseUtils.server_error_response(),
+            500
+        )
+
+
+@app.route('/api/process-base64', methods=['POST'])
+def process_base64_file():
+    """Base64文件处理接口"""
+    try:
+        # 检查请求是否包含JSON数据
+        if not request.is_json:
+            return ResponseUtils.make_json_response(
+                ResponseUtils.error_response("请求必须包含JSON数据"),
+                400
+            )
+        
+        data = request.get_json()
+        
+        # 检查必需的字段
+        if 'file_data' not in data or 'filename' not in data:
+            return ResponseUtils.make_json_response(
+                ResponseUtils.error_response("缺少必需字段: file_data 和 filename"),
+                400
+            )
+        
+        file_data = data['file_data']
+        filename = data['filename']
+        
+        # 检查文件名
+        if not filename:
+            return ResponseUtils.make_json_response(
+                ResponseUtils.error_response("文件名不能为空"),
+                400
+            )
+        
+        # 检查文件类型
+        from config import Config
+        if not Config.is_allowed_file(filename):
+            return ResponseUtils.make_json_response(
+                ResponseUtils.unsupported_file_type_response(
+                    FileUtils.get_file_extension(filename) or "unknown",
+                    Config.get_all_allowed_extensions()
+                ),
+                415
+            )
+        
+        # 处理base64数据
+        try:
+            # 如果base64数据包含data URL前缀，需要先移除
+            if file_data.startswith('data:'):
+                # 格式: data:application/pdf;base64,base64_content
+                header, file_data = file_data.split(',', 1)
+            
+            # 解码base64数据
+            file_bytes = base64.b64decode(file_data)
+            
+        except Exception as e:
+            return ResponseUtils.make_json_response(
+                ResponseUtils.error_response(f"Base64数据解码失败: {str(e)}"),
+                400
+            )
+        
+        # 创建临时文件
+        try:
+            # 生成唯一的临时文件名
+            temp_filename = FileUtils.generate_unique_filename(filename)
+            temp_file_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
+            
+            # 确保上传目录存在
+            Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
+            
+            # 将解码后的数据写入临时文件
+            with open(temp_file_path, 'wb') as f:
+                f.write(file_bytes)
+            
+        except Exception as e:
+            return ResponseUtils.make_json_response(
+                ResponseUtils.error_response(f"创建临时文件失败: {str(e)}"),
+                500
+            )
+        
+        try:
+            # 验证文件大小
+            valid, size_error = FileUtils.validate_file_size(temp_file_path, 100)
+            if not valid:
+                FileUtils.cleanup_file(temp_file_path)
+                return ResponseUtils.make_json_response(
+                    ResponseUtils.file_too_large_response("100MB"),
+                    413
+                )
+            
+            # 获取文件类型
+            file_type = Config.get_file_type(filename)
+            
+            # 准备处理器配置
+            processor_config = {
+                'yunwu_api_key': app.config.get('YUNWU_API_KEY'),
+                'yunwu_api_base_url': app.config.get('YUNWU_API_BASE_URL'),
+                'gemini_model': app.config.get('DEFAULT_GEMINI_MODEL'),
+                'save_intermediate': app.config.get('SAVE_INTERMEDIATE_FILES', False)
+            }
+            
+            # 调试信息
+            app.logger.info(f"处理Base64文件: {filename}, 大小: {FileUtils.get_file_size_str(temp_file_path)}")
+            app.logger.info(f"处理器配置: {processor_config}")
+            
+            # 获取处理器并处理文件
+            processor = get_processor(file_type, processor_config)
+            result = processor.process_with_timing(Path(temp_file_path))
+            
+            # 清理临时文件
+            if app.config.get('CLEANUP_TEMP_FILES', True):
+                FileUtils.cleanup_file(temp_file_path)
+            
+            # 返回处理结果
+            if result.success:
+                return ResponseUtils.make_json_response(
+                    ResponseUtils.processing_response(
+                        filename=filename,
+                        content=result.content,
+                        file_type=file_type,
+                        processing_time=result.processing_time,
+                        metadata=result.metadata
+                    )
+                )
+            else:
+                return ResponseUtils.make_json_response(
+                    ResponseUtils.error_response(
+                        f"文件处理失败: {result.error}"
+                    ),
+                    500
+                )
+                
+        except ValueError as e:
+            # 清理文件
+            FileUtils.cleanup_file(temp_file_path)
+            return ResponseUtils.make_json_response(
+                ResponseUtils.error_response(str(e)),
+                400
+            )
+        
+        except Exception as e:
+            # 清理文件
+            FileUtils.cleanup_file(temp_file_path)
+            app.logger.error(f"处理Base64文件时发生异常: {e}", exc_info=True)
+            return ResponseUtils.make_json_response(
+                ResponseUtils.server_error_response("文件处理过程中发生错误"),
+                500
+            )
+    
+    except Exception as e:
+        app.logger.error(f"Base64 API调用异常: {e}", exc_info=True)
         return ResponseUtils.make_json_response(
             ResponseUtils.server_error_response(),
             500
