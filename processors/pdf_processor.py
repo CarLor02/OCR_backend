@@ -216,9 +216,9 @@ class PDFProcessor(BaseProcessor):
                 return ""
             
             # 构建API URL
-            base_url = self.config.get('yunwu_api_base_url', 'https://yunwu.ai/v1')
+            base_url = self.config.get('yunwu_api_base_url', 'https://yunwu.ai/v1beta/models')
             model_name = self.config.get('gemini_model', 'gemini-2.5-flash')
-            url = f"{base_url}beta/models/{model_name}:generateContent"
+            url = f"{base_url}/{model_name}:generateContent"
             
             headers = {
                 "Content-Type": "application/json"
