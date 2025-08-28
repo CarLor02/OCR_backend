@@ -55,6 +55,9 @@ class Config:
     YUNWU_API_KEY = os.environ.get('YUNWU_API_KEY')
     YUNWU_API_BASE_URL = os.environ.get('YUNWU_API_BASE_URL', 'https://yunwu.ai/v1')
     DEFAULT_GEMINI_MODEL = os.environ.get('DEFAULT_GEMINI_MODEL', 'gemini-2.0-flash-exp')
+    
+    # MonkeyOCR API配置
+    MONKEY_OCR_API_URL = os.environ.get('MONKEY_OCR_API_URL', 'http://38.60.251.79:7860/api/parse')
 
     # 处理选项
     SAVE_INTERMEDIATE_FILES = os.environ.get('SAVE_INTERMEDIATE_FILES', 'false').lower() == 'true'

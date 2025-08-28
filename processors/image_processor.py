@@ -113,13 +113,22 @@ class ImageProcessor(BaseProcessor):
                 ]
             }
             
-            # 发送请求到Gemini API
-            url = "https://yunwu.ai/v1beta/models/gemini-2.0-flash:generateContent" #TODO：硬编码
+            # 验证API key
+            api_key = self.config.get('yunwu_api_key') if self.config else None
+            if not api_key:
+                self.logger.error("云雾API密钥未配置")
+                return ""
+            
+            # 构建API URL
+            base_url = self.config.get('yunwu_api_base_url', 'https://yunwu.ai/v1')
+            model_name = self.config.get('gemini_model', 'gemini-2.0-flash')
+            url = f"{base_url}beta/models/{model_name}:generateContent"
+            
             headers = {
                 "Content-Type": "application/json"
             }
             params = {
-                "key": "your_api_key_here"  # TODO去掉硬编码(我取环境变量的一直不对，就这么写死了)
+                "key": api_key
             }
             
             response = requests.post(
@@ -138,6 +147,15 @@ class ImageProcessor(BaseProcessor):
                 else:
                     self.logger.error("Gemini API返回格式异常")
                     return ""
+            elif response.status_code == 502:
+                self.logger.error("API网关错误 (502) - 云雾AI服务暂时不可用，请稍后重试")
+                return ""
+            elif response.status_code == 429:
+                self.logger.error("API请求频率限制 (429) - 请稍后重试")
+                return ""
+            elif response.status_code == 401:
+                self.logger.error("API认证失败 (401) - 请检查API密钥是否正确")
+                return ""
             else:
                 self.logger.error(f"Gemini API调用失败: {response.status_code}, {response.text}")
                 return ""
