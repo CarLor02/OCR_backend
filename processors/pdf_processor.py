@@ -92,6 +92,18 @@ class PDFProcessor(BaseProcessor):
         pipeline_options.do_ocr = False
         pipeline_options.do_table_structure = True
         pipeline_options.table_structure_options.do_cell_matching = False
+        
+        # 配置表格模型模式 (fast 或 accurate)
+        tableformer_mode = self.config.get('docling_tableformer_mode', 'fast') if self.config else 'fast'
+        if tableformer_mode.lower() == 'fast':
+            from docling.datamodel.pipeline_options import TableFormerMode
+            pipeline_options.table_structure_options.mode = TableFormerMode.FAST
+            self.logger.info("✅ 使用fast表格模型 (更快但精度稍低)")
+        else:
+            from docling.datamodel.pipeline_options import TableFormerMode
+            pipeline_options.table_structure_options.mode = TableFormerMode.ACCURATE
+            self.logger.info("✅ 使用accurate表格模型 (更精确但较慢)")
+        
         pipeline_options.generate_page_images = False
         pipeline_options.generate_picture_images = False
     

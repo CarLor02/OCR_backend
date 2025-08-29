@@ -59,6 +59,9 @@ class Config:
     # MonkeyOCR API配置
     MONKEY_OCR_API_URL = os.environ.get('MONKEY_OCR_API_URL', 'http://38.60.251.79:7860/api/parse')
 
+    # Docling模型配置
+    DOCLING_TABLEFORMER_MODE = os.environ.get('DOCLING_TABLEFORMER_MODE', 'fast')  # 'fast' 或 'accurate'
+
     # 处理选项
     SAVE_INTERMEDIATE_FILES = os.environ.get('SAVE_INTERMEDIATE_FILES', 'false').lower() == 'true'
     CLEANUP_TEMP_FILES = os.environ.get('CLEANUP_TEMP_FILES', 'true').lower() == 'true'

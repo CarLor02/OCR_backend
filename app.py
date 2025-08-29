@@ -266,7 +266,9 @@ def process_file():
                 'yunwu_api_key': app.config.get('YUNWU_API_KEY'),
                 'yunwu_api_base_url': app.config.get('YUNWU_API_BASE_URL'),
                 'gemini_model': app.config.get('DEFAULT_GEMINI_MODEL'),
-                'save_intermediate': app.config.get('SAVE_INTERMEDIATE_FILES', False)
+                'save_intermediate': app.config.get('SAVE_INTERMEDIATE_FILES', False),
+                'docling_tableformer_mode': app.config.get('DOCLING_TABLEFORMER_MODE', 'fast'),
+                'monkey_ocr_api_url': app.config.get('MONKEY_OCR_API_URL')
             }
             
             # 调试信息
