@@ -56,8 +56,12 @@ class Config:
     YUNWU_API_BASE_URL = os.environ.get('YUNWU_API_BASE_URL', 'https://yunwu.ai/v1')
     DEFAULT_GEMINI_MODEL = os.environ.get('DEFAULT_GEMINI_MODEL', 'gemini-2.0-flash-exp')
     
-    # MonkeyOCR API配置
+    # MonkeyOCR API配置（兼容旧参数）
     MONKEY_OCR_API_URL = os.environ.get('MONKEY_OCR_API_URL', 'http://38.60.251.79:7860/api/parse')
+    SCANNED_PDF_OCR_API_URL = os.environ.get('SCANNED_PDF_OCR_API_URL', MONKEY_OCR_API_URL)
+    SCANNED_PDF_CHUNK_SIZE = int(os.environ.get('SCANNED_PDF_CHUNK_SIZE', 50))
+    SCANNED_PDF_API_TIMEOUT = int(os.environ.get('SCANNED_PDF_API_TIMEOUT', 300))
+    SCANNED_PDF_REQUEST_DELAY = float(os.environ.get('SCANNED_PDF_REQUEST_DELAY', 0))
 
     # Docling模型配置
     DOCLING_TABLEFORMER_MODE = os.environ.get('DOCLING_TABLEFORMER_MODE', 'fast')  # 'fast' 或 'accurate'

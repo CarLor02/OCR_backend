@@ -268,7 +268,11 @@ def process_file():
                 'gemini_model': app.config.get('DEFAULT_GEMINI_MODEL'),
                 'save_intermediate': app.config.get('SAVE_INTERMEDIATE_FILES', False),
                 'docling_tableformer_mode': app.config.get('DOCLING_TABLEFORMER_MODE', 'fast'),
-                'monkey_ocr_api_url': app.config.get('MONKEY_OCR_API_URL')
+                'monkey_ocr_api_url': app.config.get('MONKEY_OCR_API_URL'),
+                'scanned_pdf_ocr_api_url': app.config.get('SCANNED_PDF_OCR_API_URL'),
+                'scanned_pdf_chunk_size': app.config.get('SCANNED_PDF_CHUNK_SIZE', 50),
+                'scanned_pdf_api_timeout': app.config.get('SCANNED_PDF_API_TIMEOUT', 300),
+                'scanned_pdf_request_delay': app.config.get('SCANNED_PDF_REQUEST_DELAY', 0.0)
             }
             
             # 调试信息

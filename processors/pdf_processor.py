@@ -6,9 +6,10 @@ PDF处理器
 import os
 import json
 import tempfile
+import time
 import requests
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 from .base import BaseProcessor, ProcessingResult
 import re
 import pdfplumber
@@ -32,13 +33,12 @@ try:
 except ImportError:
     PYMUPDF_AVAILABLE = False
 
-# 图像处理（用于扫描PDF）
+# 扫描PDF分块
 try:
-    from openai import OpenAI
-    import base64
-    IMAGE_API_AVAILABLE = True
+    from PyPDF2 import PdfReader, PdfWriter
+    PYPDF2_AVAILABLE = True
 except ImportError:
-    IMAGE_API_AVAILABLE = False
+    PYPDF2_AVAILABLE = False
 
 
 class PDFProcessor(BaseProcessor):
@@ -163,117 +163,198 @@ class PDFProcessor(BaseProcessor):
             self.logger.error(f"检测扫描PDF时出错: {e}")
             return False
     
-    def process_scanned_pdf(self, file_path):
-        """
-        调用MonkeyOCRPDF解析API接口
-        :param file_path: 要解析的PDF文件路径
-        :return: 解析后的markdown内容
-        """
-        url = self.config.get('monkey_ocr_api_url', 'http://38.60.251.79:7860/api/parse')
-    
-        with open(file_path, 'rb') as f:
-            files = {'file': (file_path.name, f, 'application/pdf')}
-            response = requests.post(url, files=files)
-    
-        if response.status_code == 200:
-            return response.json()['markdown']
-        else:
-            raise Exception(f"API调用失败，状态码: {response.status_code}, 错误: {response.text}")
+    def process_scanned_pdf(self, file_path: Path) -> Tuple[str, Dict[str, Any]]:
+        """使用批量OCR接口处理扫描PDF (基于pdf_ocr_processor_v2逻辑)"""
 
-   
-   
-    def process_scanned_pdf_with_api(self, file_path):
-        """
-        使用VLM API处理扫描PDF的页面图像
-        
-        Args:
-            file_path: 文件地址
-            
-        Returns:
-            str: Markdown内容
-        """
-        
+        if not PYPDF2_AVAILABLE:
+            raise ImportError("PyPDF2库未安装，无法处理扫描PDF")
+
+        ocr_api_url = (
+            self.config.get('scanned_pdf_ocr_api_url')
+            or self.config.get('monkey_ocr_api_url')
+        )
+        if not ocr_api_url:
+            raise ValueError("扫描PDF OCR接口地址未配置")
+
+        chunk_size = self._get_int_config('scanned_pdf_chunk_size', 50)
+        timeout = self._get_int_config('scanned_pdf_api_timeout', 300)
+        delay = self._get_float_config('scanned_pdf_request_delay', 0.0)
+
+        chunk_metadata = {
+            'chunk_size': chunk_size,
+            'chunks_total': 0,
+            'chunks_succeeded': 0,
+            'chunks_failed': 0
+        }
+
+        sections: List[str] = [f"# {file_path.stem}\n"]
+
+        with tempfile.TemporaryDirectory(prefix="pdf_ocr_chunks_") as temp_dir:
+            chunks = self._split_pdf_for_ocr(file_path, chunk_size, Path(temp_dir))
+            chunk_metadata['chunks_total'] = len(chunks)
+
+            if not chunks:
+                raise RuntimeError("PDF分块失败，未生成任何章节")
+
+            for index, (chunk_path, start_page, end_page) in enumerate(chunks, start=1):
+                self.logger.info(
+                    f"扫描PDF OCR: 第 {index}/{len(chunks)} 段, 页码 {start_page}-{end_page}, 文件大小 {chunk_path.stat().st_size} 字节"
+                )
+
+                try:
+                    raw_content = self._call_scanned_pdf_api(chunk_path, ocr_api_url, timeout)
+                    formatted_content = self._format_ocr_markdown(raw_content)
+
+                    if formatted_content:
+                        chunk_metadata['chunks_succeeded'] += 1
+                        sections.append(
+                            f"## 第 {index} 部分 (页码: {start_page}-{end_page})\n\n{formatted_content}\n"
+                        )
+                    else:
+                        chunk_metadata['chunks_failed'] += 1
+                        sections.append(f"<!-- OCR接口返回空内容: {chunk_path.name} -->\n")
+
+                except Exception as exc:
+                    chunk_metadata['chunks_failed'] += 1
+                    self.logger.error(
+                        f"扫描PDF OCR失败 (段 {index}): {exc}",
+                        exc_info=True
+                    )
+                    sections.append(
+                        f"<!-- OCR处理失败: {chunk_path.name} - {exc} -->\n"
+                    )
+
+                if delay > 0 and index < len(chunks):
+                    time.sleep(delay)
+
+        if chunk_metadata['chunks_succeeded'] == 0:
+            raise RuntimeError("OCR接口未返回可用内容，请检查服务状态")
+
+        content = "\n".join(sections).strip()
+        return content, chunk_metadata
+
+    def _get_int_config(self, key: str, default: int) -> int:
+        value = self.config.get(key, default)
         try:
-            # 直接读取PDF文件的原生二进制数据
-            with open(file_path, 'rb') as f:
-                pdf_data = f.read()
-            
-            # 将PDF原生数据编码为base64
-            pdf_base64 = base64.b64encode(pdf_data).decode('utf-8')
-            
-            # 构建请求数据
-            request_data = {
-                "contents": [
-                    {
-                        "role": "user", 
-                        "parts": [
-                            {
-                                "inline_data": {
-                                    "mime_type": "application/pdf",
-                                    "data": pdf_base64
-                                }
-                            },
-                            {
-                                "text": "请提取这个PDF中的所有文本内容，并以Markdown格式返回。忽略水印和印章，保留原始格式和表格结构。"
-                            }
-                        ]
-                    }
-                ]
-            }
-            
-            # 验证API key
-            api_key = self.config.get('yunwu_api_key') if self.config else None
-            if not api_key:
-                self.logger.error("云雾API密钥未配置")
-                return ""
-            
-            # 构建API URL
-            base_url = self.config.get('yunwu_api_base_url', 'https://yunwu.ai/v1beta/models')
-            model_name = self.config.get('gemini_model', 'gemini-2.5-flash')
-            url = f"{base_url}/{model_name}:generateContent"
-            
-            headers = {
-                "Content-Type": "application/json"
-            }
-            params = {
-                "key": api_key
-            }
-            
-            self.logger.info(f"开始调用Gemini API处理PDF: {file_path.name}")
-            
-            response = requests.post(
-                url,
-                json=request_data,
-                headers=headers,
-                params=params,
-                timeout=600
+            return int(value)
+        except (TypeError, ValueError):
+            self.logger.warning(f"配置项 {key}={value} 无效，使用默认值 {default}")
+            return default
+
+    def _get_float_config(self, key: str, default: float) -> float:
+        value = self.config.get(key, default)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            self.logger.warning(f"配置项 {key}={value} 无效，使用默认值 {default}")
+            return default
+
+    def _split_pdf_for_ocr(self, pdf_path: Path, chunk_size: int, temp_dir: Path) -> List[Tuple[Path, int, int]]:
+        if chunk_size <= 0:
+            self.logger.warning("扫描PDF分块大小配置无效，使用默认值50")
+            chunk_size = 50
+
+        try:
+            reader = PdfReader(str(pdf_path))
+        except Exception as exc:
+            self.logger.error(f"读取PDF失败: {exc}")
+            raise
+
+        total_pages = len(reader.pages)
+        if total_pages == 0:
+            self.logger.warning("PDF文件没有可用页面")
+            return []
+
+        chunk_files: List[Tuple[Path, int, int]] = []
+        temp_dir = Path(temp_dir)
+
+        for start in range(0, total_pages, chunk_size):
+            end = min(start + chunk_size, total_pages)
+            writer = PdfWriter()
+            for page_num in range(start, end):
+                writer.add_page(reader.pages[page_num])
+
+            chunk_filename = f"{pdf_path.stem}_pages_{start + 1}-{end}.pdf"
+            chunk_path = temp_dir / chunk_filename
+
+            with open(chunk_path, 'wb') as output:
+                writer.write(output)
+
+            chunk_files.append((chunk_path, start + 1, end))
+
+        self.logger.info(
+            f"扫描PDF分块完成: 总页数={total_pages}, 分块大小={chunk_size}, 分块数量={len(chunk_files)}"
+        )
+
+        return chunk_files
+
+    def _call_scanned_pdf_api(self, chunk_path: Path, ocr_api_url: str, timeout: int) -> str:
+        try:
+            with open(chunk_path, 'rb') as file_handle:
+                files = {'file': (chunk_path.name, file_handle, 'application/pdf')}
+                response = requests.post(ocr_api_url, files=files, timeout=timeout)
+        except requests.exceptions.Timeout as exc:
+            raise TimeoutError(f"OCR接口请求超时 ({chunk_path.name})") from exc
+        except requests.exceptions.ConnectionError as exc:
+            raise ConnectionError(f"无法连接到OCR接口: {ocr_api_url}") from exc
+        except requests.RequestException as exc:
+            raise RuntimeError(f"OCR接口请求失败: {exc}") from exc
+
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"OCR接口返回错误状态 {response.status_code}: {response.text[:200]}"
             )
-            
-            if response.status_code == 200:
-                result = response.json()
-                if 'candidates' in result and len(result['candidates']) > 0:
-                    markdown_content = result['candidates'][0]['content']['parts'][0]['text']
-                    self.logger.info(f"成功提取PDF内容，长度: {len(markdown_content)}")
-                    return markdown_content
-                else:
-                    self.logger.error("API返回数据格式异常")
-                    return ""
-            elif response.status_code == 502:
-                self.logger.error("API网关错误 (502) - 云雾AI服务暂时不可用，请稍后重试")
-                return ""
-            elif response.status_code == 429:
-                self.logger.error("API请求频率限制 (429) - 请稍后重试")
-                return ""
-            elif response.status_code == 401:
-                self.logger.error("API认证失败 (401) - 请检查API密钥是否正确")
-                return ""
-            else:
-                self.logger.error(f"API调用失败: {response.status_code}, {response.text}")
-                return ""
-                
-        except Exception as e:
-            self.logger.error(f"处理PDF时出错: {e}")
+
+        if not response.content:
             return ""
+
+        try:
+            payload = response.json()
+        except ValueError:
+            return response.text
+
+        if isinstance(payload, dict):
+            for field in ('markdown', 'text', 'content', 'result', 'data'):
+                if field in payload and payload[field]:
+                    value = payload[field]
+                    if isinstance(value, (list, tuple)):
+                        value = "\n".join(str(item) for item in value)
+                    return str(value)
+
+            return json.dumps(payload, ensure_ascii=False)
+
+        return str(payload)
+
+    def _format_ocr_markdown(self, content: str) -> str:
+        if not content:
+            return ""
+
+        content = self._strip_inline_base64_images(content)
+        content = self.remove_images_from_markdown(content)
+        return self._clean_ocr_markdown(content).strip()
+
+    def _strip_inline_base64_images(self, content: str) -> str:
+        return re.sub(r'<img[^>]+src="data:image/[^>]+>', '', content, flags=re.IGNORECASE)
+
+    def _clean_ocr_markdown(self, content: str) -> str:
+        content = re.sub(r"\r\n?", "\n", content)
+        content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)
+
+        lines = content.split('\n')
+        cleaned_lines = []
+        prev_empty = False
+
+        for line in lines:
+            stripped_line = line.strip()
+            if stripped_line == '':
+                if not prev_empty:
+                    cleaned_lines.append('')
+                prev_empty = True
+            else:
+                cleaned_lines.append(stripped_line)
+                prev_empty = False
+
+        return '\n'.join(cleaned_lines)
     
     def remove_images_from_markdown(self, content: str) -> str:
         """
@@ -285,9 +366,9 @@ class PDFProcessor(BaseProcessor):
         Returns:
             str: 移除图像后的内容
         """
-        
-        # 移除图像引用
+        # 移除图像引用 (Markdown语法和HTML标签)
         content = re.sub(r'!\[.*?\]\(.*?\)', '', content)
+        content = re.sub(r'<img[^>]*>', '', content, flags=re.IGNORECASE)
         # 移除多余的空行
         content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)
         return content.strip()
@@ -425,6 +506,7 @@ class PDFProcessor(BaseProcessor):
         try:
             markdown_content=""
             pdf_type = self.analyze_pdf(file_path)
+            scanned_details: Dict[str, Any] = {}
 
            #根据pdf_type实现合适的处理方式，如果是text，就采用
             if pdf_type == "text":
@@ -439,7 +521,7 @@ class PDFProcessor(BaseProcessor):
                         markdown_content += f"\n\n## 第 {page_num + 1} 页\n\n{page_text}"
                 doc.close()
             elif pdf_type == "scanned":
-                markdown_content=self.process_scanned_pdf_with_api(file_path)
+                markdown_content, scanned_details = self.process_scanned_pdf(file_path)
             else:  # 混合型
                 conv_result = self.doc_converter.convert(str(file_path))
                 #直接导出Markdown
@@ -472,6 +554,9 @@ class PDFProcessor(BaseProcessor):
                 'is_scanned': pdf_type == "scanned",
                 'pages_count': pages_count
             }
+
+            if scanned_details:
+                metadata.update(scanned_details)
             
             return ProcessingResult(
                 success=True,
