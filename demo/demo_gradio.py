@@ -307,7 +307,7 @@ if __name__ == '__main__':
     footer { visibility: hidden; }
     """
 
-    with gr.Blocks(theme="ocean", css=css, title='文档处理工具') as demo:
+    with gr.Blocks(title='文档处理工具') as demo:
         gr.HTML("<h1 style='text-align: center;'>文档处理工具</h1>")
         
         with gr.Row():
@@ -333,7 +333,7 @@ if __name__ == '__main__':
                             with gr.TabItem("Markdown预览"):
                                 md_view = gr.Markdown("## 请点击解析按钮...", elem_id="markdown_output")
                             with gr.TabItem("原始文本"):
-                                md_raw = gr.Textbox("🕐 等待解析结果...", lines=38, show_copy_button=True)
+                                md_raw = gr.Textbox("🕐 等待解析结果...", lines=38)
                 
                 with gr.Row():
                     pdf_download_button = gr.DownloadButton("⬇️ 下载PDF", visible=True)
@@ -352,4 +352,5 @@ if __name__ == '__main__':
         clear_button.click(fn=clear_all, 
                           outputs=[file_input, pdf_view, md_view, md_raw, page_info, pdf_download_button, md_download_button])
 
-    demo.launch(server_port=7861, debug=False, share=False, inbrowser=False)
+    demo.launch(server_port=7861, debug=False, share=False, inbrowser=False,
+                theme="ocean", css=css)
