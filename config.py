@@ -57,7 +57,7 @@ class Config:
     DEFAULT_GEMINI_MODEL = os.environ.get('DEFAULT_GEMINI_MODEL', 'gemini-2.0-flash-exp')
     
     # MonkeyOCR API配置（兼容旧参数）
-    MONKEY_OCR_API_URL = os.environ.get('MONKEY_OCR_API_URL', 'http://38.60.251.79:7860/api/parse')
+    MONKEY_OCR_API_URL = os.environ.get('MONKEY_OCR_API_URL', 'http://115.190.121.59:7860/api/process-base64')
     SCANNED_PDF_OCR_API_URL = os.environ.get('SCANNED_PDF_OCR_API_URL', MONKEY_OCR_API_URL)
     SCANNED_PDF_CHUNK_SIZE = int(os.environ.get('SCANNED_PDF_CHUNK_SIZE', 50))
     SCANNED_PDF_API_TIMEOUT = int(os.environ.get('SCANNED_PDF_API_TIMEOUT', 300))
