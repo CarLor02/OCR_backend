@@ -5,6 +5,7 @@ PDF处理器
 
 import os
 import json
+import base64
 import tempfile
 import time
 import requests
@@ -291,8 +292,9 @@ class PDFProcessor(BaseProcessor):
     def _call_scanned_pdf_api(self, chunk_path: Path, ocr_api_url: str, timeout: int) -> str:
         try:
             with open(chunk_path, 'rb') as file_handle:
-                files = {'file': (chunk_path.name, file_handle, 'application/pdf')}
-                response = requests.post(ocr_api_url, files=files, timeout=timeout)
+                file_b64 = base64.b64encode(file_handle.read()).decode('utf-8')
+            payload = {'file_data': file_b64, 'filename': chunk_path.name}
+            response = requests.post(ocr_api_url, json=payload, timeout=timeout)
         except requests.exceptions.Timeout as exc:
             raise TimeoutError(f"OCR接口请求超时 ({chunk_path.name})") from exc
         except requests.exceptions.ConnectionError as exc:
