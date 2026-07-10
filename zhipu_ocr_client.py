@@ -183,9 +183,18 @@ class ZhipuOCRClient:
         return content_types.get(suffix, 'image/jpeg')
 
 
-def pdf_page_to_image(page, dpi: int = 200) -> bytes:
+DEFAULT_RENDER_DPI = 200
+
+
+def pdf_page_to_image(page, dpi: int = DEFAULT_RENDER_DPI) -> bytes:
     """
     将PyMuPDF的page对象转为PNG图片字节
+
+    对于扫描件页面（页面内容通常是拍照后嵌入的单张图片），直接用
+    page.get_pixmap()渲染会忽略图片自带的EXIF旋转信息，导致画面方向
+    与实际阅读方向不一致（常见于手机拍照扫描的PDF），进而使OCR识别乱码。
+    这里优先尝试提取内嵌图片并按其EXIF方向校正后使用；若页面不满足该
+    场景（非单图页/无EXIF旋转信息），则回退到常规的页面渲染方式。
 
     Args:
         page: fitz.Page 对象
@@ -194,9 +203,64 @@ def pdf_page_to_image(page, dpi: int = 200) -> bytes:
     Returns:
         bytes: PNG图片字节数据
     """
+    corrected = _try_get_exif_corrected_image(page, dpi=dpi)
+    if corrected is not None:
+        return corrected
+
     mat = fitz.Matrix(dpi / 72, dpi / 72)
     pix = page.get_pixmap(matrix=mat, alpha=False)
     return pix.tobytes('png')
+
+
+def _try_get_exif_corrected_image(page, dpi: int = DEFAULT_RENDER_DPI) -> Optional[bytes]:
+    """
+    若页面内容仅由单张内嵌图片构成，且该图片带有非默认的EXIF方向信息，
+    则提取该图片并按EXIF方向校正后返回PNG字节；否则返回None，交由调用方
+    走常规的页面渲染逻辑。
+    """
+    try:
+        images = page.get_images(full=True)
+        if len(images) != 1:
+            return None
+
+        doc = page.parent
+        if doc is None:
+            return None
+
+        xref = images[0][0]
+        base_image = doc.extract_image(xref)
+        if not base_image or not base_image.get('image'):
+            return None
+
+        from PIL import Image, ImageOps
+        import io
+
+        img = Image.open(io.BytesIO(base_image['image']))
+        exif = img.getexif()
+        orientation = exif.get(274, 1) if exif else 1
+        if orientation == 1:
+            # 无EXIF方向信息或方向正常，交由常规渲染逻辑处理
+            return None
+
+        corrected = ImageOps.exif_transpose(img)
+        if corrected is None:
+            return None
+        if corrected.mode not in ('RGB', 'L'):
+            corrected = corrected.convert('RGB')
+
+        if dpi != DEFAULT_RENDER_DPI:
+            scale = dpi / DEFAULT_RENDER_DPI
+            new_size = (
+                max(1, int(corrected.width * scale)),
+                max(1, int(corrected.height * scale))
+            )
+            corrected = corrected.resize(new_size)
+
+        buf = io.BytesIO()
+        corrected.save(buf, format='PNG')
+        return buf.getvalue()
+    except Exception:
+        return None
 
 
 try:
