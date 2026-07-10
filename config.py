@@ -56,6 +56,11 @@ class Config:
     YUNWU_API_BASE_URL = os.environ.get('YUNWU_API_BASE_URL', 'https://yunwu.ai/v1')
     DEFAULT_GEMINI_MODEL = os.environ.get('DEFAULT_GEMINI_MODEL', 'gemini-2.0-flash-exp')
     
+    # 智谱OCR API配置
+    ZHIPUAI_API_KEY = os.environ.get('ZHIPUAI_API_KEY')
+    ZHIPUAI_OCR_API_URL = os.environ.get('ZHIPUAI_OCR_API_URL', 'https://open.bigmodel.cn/api/paas/v4/files/ocr')
+    ZHIPUAI_OCR_LANGUAGE_TYPE = os.environ.get('ZHIPUAI_OCR_LANGUAGE_TYPE', 'CHN_ENG')
+    
     # MonkeyOCR API配置（兼容旧参数）
     MONKEY_OCR_API_URL = os.environ.get('MONKEY_OCR_API_URL', 'http://115.190.121.59:7860/api/process-base64')
     SCANNED_PDF_OCR_API_URL = os.environ.get('SCANNED_PDF_OCR_API_URL', MONKEY_OCR_API_URL)

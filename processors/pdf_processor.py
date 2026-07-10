@@ -12,6 +12,7 @@ import requests
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from .base import BaseProcessor, ProcessingResult
+from zhipu_ocr_client import ZhipuOCRClient, process_scanned_pdf_with_zhipu
 import re
 import pdfplumber
 # PDF处理相关导入
@@ -523,7 +524,24 @@ class PDFProcessor(BaseProcessor):
                         markdown_content += f"\n\n## 第 {page_num + 1} 页\n\n{page_text}"
                 doc.close()
             elif pdf_type == "scanned":
-                markdown_content, scanned_details = self.process_scanned_pdf(file_path)
+                zhipuai_api_key = self.config.get('zhipuai_api_key') if self.config else None
+                if zhipuai_api_key:
+                    self.logger.info("检测到扫描PDF，使用智谱OCR服务处理")
+                    zhipu_client = ZhipuOCRClient(
+                        api_key=zhipuai_api_key,
+                        api_url=self.config.get('zhipuai_ocr_api_url'),
+                        language_type=self.config.get('zhipuai_ocr_language_type', 'CHN_ENG')
+                    )
+                    markdown_content, scanned_details = process_scanned_pdf_with_zhipu(
+                        file_path=file_path,
+                        zhipu_client=zhipu_client,
+                        logger_instance=self.logger,
+                        delay=self._get_float_config('scanned_pdf_request_delay', 0.0),
+                        timeout=self._get_int_config('scanned_pdf_api_timeout', 300)
+                    )
+                else:
+                    self.logger.info("检测到扫描PDF，使用MonkeyOCR接口处理")
+                    markdown_content, scanned_details = self.process_scanned_pdf(file_path)
             else:  # 混合型
                 conv_result = self.doc_converter.convert(str(file_path))
                 #直接导出Markdown

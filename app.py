@@ -272,7 +272,10 @@ def process_file():
                 'scanned_pdf_ocr_api_url': app.config.get('SCANNED_PDF_OCR_API_URL'),
                 'scanned_pdf_chunk_size': app.config.get('SCANNED_PDF_CHUNK_SIZE', 50),
                 'scanned_pdf_api_timeout': app.config.get('SCANNED_PDF_API_TIMEOUT', 300),
-                'scanned_pdf_request_delay': app.config.get('SCANNED_PDF_REQUEST_DELAY', 0.0)
+                'scanned_pdf_request_delay': app.config.get('SCANNED_PDF_REQUEST_DELAY', 0.0),
+                'zhipuai_api_key': app.config.get('ZHIPUAI_API_KEY'),
+                'zhipuai_ocr_api_url': app.config.get('ZHIPUAI_OCR_API_URL'),
+                'zhipuai_ocr_language_type': app.config.get('ZHIPUAI_OCR_LANGUAGE_TYPE', 'CHN_ENG')
             }
             
             # 调试信息
@@ -552,6 +555,11 @@ if __name__ == '__main__':
         app.logger.info("云雾AI API密钥已配置")
     else:
         app.logger.warning("云雾AI API密钥未配置，图像和扫描PDF处理功能将不可用")
+    
+    if app.config.get('ZHIPUAI_API_KEY'):
+        app.logger.info("智谱OCR API密钥已配置，扫描PDF将使用智谱OCR服务")
+    else:
+        app.logger.info("智谱OCR API密钥未配置，扫描PDF将使用MonkeyOCR服务")
     
     app.run(
         host=app.config['HOST'],
