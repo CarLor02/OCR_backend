@@ -133,7 +133,7 @@ def setup_local_models():
 setup_local_models()
 
 from config import get_config
-from processors import PDFProcessor, ImageProcessor, ExcelProcessor, HTMLProcessor
+from processors import PDFProcessor, ImageProcessor, ExcelProcessor, HTMLProcessor, WordProcessor
 from utils import FileUtils, ResponseUtils
 
 
@@ -175,7 +175,8 @@ def get_processor(file_type: str, config: dict):
         'pdf': PDFProcessor,
         'image': ImageProcessor,
         'excel': ExcelProcessor,
-        'html': HTMLProcessor
+        'html': HTMLProcessor,
+        'word': WordProcessor
     }
     
     processor_class = processors.get(file_type)
@@ -504,7 +505,8 @@ def get_supported_types():
                     "pdf": "PDF文档",
                     "excel": "Excel表格",
                     "image": "图像文件",
-                    "html": "HTML网页"
+                    "html": "HTML网页",
+                    "word": "Word文档"
                 }
             },
             message="获取支持的文件类型成功"

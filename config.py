@@ -43,7 +43,8 @@ class Config:
         'pdf': ['.pdf'],
         'excel': ['.xls', '.xlsx'],
         'image': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif'],
-        'html': ['.html', '.htm']
+        'html': ['.html', '.htm'],
+        'word': ['.doc', '.docx']
     }
     
     

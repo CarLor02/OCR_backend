@@ -8,11 +8,13 @@ from .pdf_processor import PDFProcessor
 from .image_processor import ImageProcessor
 from .excel_processor import ExcelProcessor
 from .html_processor import HTMLProcessor
+from .word_processor import WordProcessor
 
 __all__ = [
     'BaseProcessor',
-    'PDFProcessor', 
+    'PDFProcessor',
     'ImageProcessor',
     'ExcelProcessor',
-    'HTMLProcessor'
+    'HTMLProcessor',
+    'WordProcessor'
 ]

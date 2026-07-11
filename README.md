@@ -1,6 +1,6 @@
 # OCR Backend
 
-多文档格式解析服务：上传 PDF / 图片 / Excel / HTML 文件，自动转换为 Markdown。
+多文档格式解析服务：上传 PDF / 图片 / Excel / Word / HTML 文件，自动转换为 Markdown。
 
 ## 功能概述
 
@@ -10,6 +10,7 @@
   - 扫描件 PDF（无文本层）→ 逐页转图片后调用 **智谱AI(ZhipuAI) OCR** 接口识别；若未配置智谱 Key，则回退到 MonkeyOCR 接口
 - **图片**（jpg/jpeg/png/gif/webp/bmp/tiff）→ 调用云雾AI（Gemini 模型）提取文字
 - **Excel**（xls/xlsx）→ 保留合并单元格信息，转换为 Markdown 表格
+- **Word**（doc/docx）→ 按原文顺序提取段落（含标题样式）和表格，转换为 Markdown；`.doc` 需系统安装 LibreOffice，会先转换为 `.docx` 再解析
 - **HTML**（html/htm）→ 清洗后转换为 Markdown
 
 ## 项目结构
@@ -23,6 +24,7 @@ OCR_backend/
 │   ├── pdf_processor.py
 │   ├── image_processor.py
 │   ├── excel_processor.py
+│   ├── word_processor.py
 │   └── html_processor.py
 ├── utils/                   # 文件/响应工具函数
 ├── start.sh                 # 启动脚本（端口清理 + 启动 app.py）
@@ -34,7 +36,9 @@ OCR_backend/
 
 ### 依赖
 
-需要 Python 3.10+，核心依赖见 `requirements.txt`（Flask、docling、PyMuPDF、pdfplumber、PyPDF2、openpyxl/xlrd、beautifulsoup4/html2text、torch 等）。
+需要 Python 3.10+，核心依赖见 `requirements.txt`（Flask、docling、PyMuPDF、pdfplumber、PyPDF2、openpyxl/xlrd、python-docx、beautifulsoup4/html2text、torch 等）。
+
+处理旧版 `.doc` 文件还需要系统安装 **LibreOffice**（用于转换为 `.docx`），macOS 可通过 `brew install --cask libreoffice` 安装。
 
 推荐使用独立虚拟环境安装：
 
